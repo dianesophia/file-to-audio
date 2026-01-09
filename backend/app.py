@@ -1,50 +1,30 @@
 import gradio as gr
 import fitz
 from gtts import gTTS
-from transformers import pipeline
 import uuid
-import os
-
-# Load AI summarizer (CPU-friendly model)
-summarizer = pipeline("summarization", model="facebook/bart-large-cnn")
 
 def process_pdf(pdf_file):
+    # Open PDF
     doc = fitz.open(pdf_file.name)
-    summaries = []
+    full_text = ""
 
     print("Total pages:", len(doc))
 
-    # Summarize each page separately
+    # Extract ALL text from every page
     for page_number, page in enumerate(doc, start=1):
         page_text = page.get_text().strip()
+        full_text += f"\n\nPage {page_number}:\n{page_text}"
 
-        if len(page_text) < 100:
-            continue  # skip empty or very small pages
+    # Safety check
+    if len(full_text.strip()) == 0:
+        return "No readable text found in PDF.", None
 
-        print(f"Summarizing page {page_number}...")
-
-        try:
-            result = summarizer(
-                page_text,
-                max_length=120,
-                min_length=40,
-                do_sample=False
-            )[0]["summary_text"]
-
-            summaries.append(f"Page {page_number}: {result}")
-
-        except Exception as e:
-            print(f"Skipping page {page_number} due to error:", e)
-
-    # Combine all summaries
-    final_summary = "\n\n".join(summaries)
-
-    # Convert summary to speech
+    # Convert FULL TEXT to speech
     audio_file = f"{uuid.uuid4()}.mp3"
-    tts = gTTS(final_summary)
+    tts = gTTS(full_text)
     tts.save(audio_file)
 
-    return final_summary, audio_file
+    return full_text, audio_file
 
 
 # Create Gradio UI
@@ -52,11 +32,11 @@ ui = gr.Interface(
     fn=process_pdf,
     inputs=gr.File(label="Upload PDF"),
     outputs=[
-        gr.Textbox(label="AI Summary (All Pages)"),
+        gr.Textbox(label="Extracted Text (Full Document)"),
         gr.Audio(label="Audio Output")
     ],
-    title="📄 AI PDF Reader (Page-by-Page)",
-    description="Upload a PDF → AI summarizes each page → Audio reads everything"
+    title="📄 PDF Audio Reader (No AI)",
+    description="Upload PDF → Reads the entire document aloud (FREE)"
 )
 
 ui.launch()
